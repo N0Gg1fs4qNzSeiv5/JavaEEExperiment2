@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        .wrapper {
+            margin: 0 auto;
+            width: 1080px;
+        }
+
+        .messages,
+        .message {
+            width: 100%;
+        }
+
+        .message {
+            border: 1px solid #ccc; /* 添加边框 */
+            border-radius: 8px; /* 圆角 */
+            padding: 16px; /* 内边距 */
+            margin: 10px; /* 外边距 */
+            background-color: #f9f9f9; /* 背景颜色 */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* 阴影效果 */
+        }
+
+        .message > .username {
+            font-weight: bold; /* 加粗用户名 */
+            color: #333; /* 用户名颜色 */
+        }
+
+        .message > .title {
+            font-size: 1.2em; /* 标题字体大小 */
+            margin-top: 8px; /* 顶部外边距 */
+            color: #007BFF; /* 标题颜色 */
+        }
+
+        .message > .content {
+            margin-top: 8px; /* 顶部外边距 */
+            color: #666; /* 内容颜色 */
+        }
+
+        .message > .datetime {
+            margin-top: 8px; /* 顶部外边距 */
+            font-size: 0.9em; /* 时间字体大小 */
+            color: #999; /* 时间颜色 */
+            text-align: right; /* 右对齐 */
+        }
+
+        .replies {
+            margin-top: 16px; /* 与主消息之间的间距 */
+            border-top: 1px solid #ccc; /* 顶部边框 */
+            padding-top: 10px; /* 内边距 */
+        }
+
+        .reply {
+            border: 1px solid #e0e0e0; /* 添加边框 */
+            border-radius: 4px; /* 圆角 */
+            padding: 10px; /* 内边距 */
+            margin-top: 10px; /* 与上一个回复之间的间距 */
+            background-color: #f1f1f1; /* 背景颜色 */
+        }
+
+        .reply .username {
+            font-weight: bold; /* 加粗用户名 */
+            color: #333; /* 用户名颜色 */
+        }
+
+        .reply .content {
+            margin-top: 5px; /* 顶部外边距 */
+            color: #555; /* 内容颜色 */
+        }
+
+        .reply .datetime {
+            margin-top: 5px; /* 顶部外边距 */
+            font-size: 0.8em; /* 时间字体大小 */
+            color: #888; /* 时间颜色 */
+            text-align: right; /* 右对齐 */
+        }
+
+        .post-form {
+            display: flex;
+            flex-direction: column; /* 纵向排列 */
+            align-items: flex-start; /* 左对齐 */
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .title-input,
+        .content-input {
+            width: 100%; /* 让输入框占满容器宽度 */
+            padding: 10px;
+            margin: 5px 0; /* 上下间距 */
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .title-input:focus,
+        .content-input:focus {
+            border-color: #66afe9; /* 聚焦时边框颜色变化 */
+            outline: none; /* 去掉默认的轮廓 */
+        }
+
+        .submit-button {
+            padding: 10px 15px;
+            margin-top: 10px; /* 与输入框的间距 */
+            background-color: #28a745; /* 按钮背景色 */
+            color: white; /* 字体颜色 */
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer; /* 鼠标悬停时显示手形光标 */
+        }
+
+        .submit-button:hover {
+            background-color: #218838; /* 鼠标悬停时背景色变化 */
+        }
+    </style>
+    <script>
+        const userCache = new Map();
+
+        async function setUserCache(userId) {
+            console.log("setUserCache")
+            const response = await fetch(`http://localhost:8080/api/users/${userId}`, {method: "GET"})
+            if (!response.ok) {
+                return
+            }
+
+            const result = await response.json()
+            if (result.code !== 1) {
+                return
+            }
+            const data = result.data
+
+            userCache.set(userId, data.username)
+        }
+
+        window.onload = async function () {
+            // 获取信息
+            const response = await fetch("http://localhost:8080/api/messages", {method: "GET"})
+            if (!response.ok) {
+                return
+            }
+            const result = await response.json();
+            if (result.code !== 1) {
+                return
+            }
+            const data = result.data
+            for (let i = 0; i < data.length; i++) {
+                // 获取用户信息，添加到缓存中
+                const message = data[i]
+                if (!userCache.has(message.userId)) {
+                    console.log("user is not exists")
+                    await setUserCache(message.userId)
+                }
+
+                // 创建DOM
+                const messageDiv = document.createElement("div")
+                messageDiv.className = "message"
+                messageDiv.innerHTML = `
+                    <div class="username">${userCache.get(message.userId)}</div>
+                    <div class="title">${message.title}</div>
+                    <div class="content">${message.content}</div>
+                    <input type="text" placeholder="context" class="add-reply-input" data-message-id=${message.id}>
+                    <button onclick="addReply('${message.id}')">回复</button>
+                    <div class="datetime">${message.createAt}</div>
+                    <div class="replies"></div>
+                `
+
+
+                const repliesDiv = messageDiv.querySelector(".replies")
+                const replies = await getReplies(message.id)
+                if (replies === null) {
+                    continue
+                }
+                for (let j = 0; j < replies.length; j++) {
+                    const reply = replies[j]
+                    if (!userCache.has(reply.userId)) {
+                        await setUserCache(reply.userId)
+                    }
+
+                    const replyDiv = document.createElement("div")
+                    replyDiv.className = "reply";
+                    replyDiv.innerHTML = `
+                        <div class="username">${userCache.get(reply.userId)}</div>
+                        <div class="content">${reply.content}</div>
+                        <div class="datetime">${reply.createAt}</div>
+                    `
+                    repliesDiv.appendChild(replyDiv)
+                }
+
+                document.querySelector(".messages").append(messageDiv)
+            }
+        }
+
+        async function getReplies(messageId) {
+            const response = await fetch(`http://localhost:8080/api/replies/${messageId}`, {method: "GET"})
+            if (!response.ok) {
+                return
+            }
+            const result = await response.json()
+            return result.data
+        }
+
+        function addMessage() {
+            const title = document.querySelector(".post-form .title-input").value
+            const content = document.querySelector(".post-form .content-input").value
+
+            fetch("http://localhost:8080/api/messages", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({"title": title, "content": content})
+            })
+                .then(response => {
+                    if (response.status === 401) {
+                        window.location.href = "/login.html"
+                    } else if (response.ok) {
+                        return response.json()
+                    }
+                })
+                .then(result => {
+                    if (result.code === 1) {
+                        window.location.reload()
+                    } else {
+                        console.log(result.message)
+                    }
+                })
+        }
+
+        function addReply(messageId) {
+            const inputElements = document.querySelectorAll(".add-reply-input")
+            let content = null
+            for (const input of inputElements) {
+                if (input.dataset.messageId === String(messageId)) {
+                    content = input.value
+                }
+            }
+
+            fetch(`http://localhost:8080/api/replies/${messageId}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({"content": content, "messageId": messageId})
+            })
+                .then(response => {
+                    if (response.status === 401) {
+                        window.location.href = "/login.html"
+                    } else if (response.ok) {
+                        return response.json()
+                    }
+                })
+                .then(result => {
+                    if (result.code === 1) {
+                        window.location.reload()
+                    } else {
+                        console.log(result.message)
+                    }
+                })
+        }
+
+        function toLogin() {
+            window.location.href = "/login.html"
+        }
+
+        function toRegister() {
+            window.location.href = "/register.html"
+        }
+    </script>
+</head>
+
+
+<body>
+<div class="wrapper">
+    <div class="login-register">
+        <button onclick="toLogin()">登陆</button>
+        <button onclick="toRegister()">注册</button>
+    </div>
+    <div class="post-form">
+        <input type="text" class="title-input" placeholder="title">
+        <input type="text" class="content-input" placeholder="content">
+        <button onclick="addMessage()" class="submit-button">发布</button>
+    </div>
+    <div class="messages">
+    </div>
+</div>
+</body>
+</html>
